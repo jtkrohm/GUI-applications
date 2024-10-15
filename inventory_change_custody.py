@@ -1,5 +1,7 @@
 import sqlite3
 import datetime
+from pyzbar.pyzbar import decode
+from PIL import Image
 
 # Connect to SQLite database (or create it if it doesn't exist)
 conn = sqlite3.connect('inventory.db')
@@ -41,7 +43,7 @@ class InventoryItem:
         self.save_to_db(None)
 
     def save_to_db(self, station):
-        for entry in self.history:
+        for entry in self.history:   # CRUD
             c.execute(
                 "INSERT INTO inventory (item_id, name, owner, transfer_date, station, weight, description, serial_number, model_number, manufacturer, purchase_date, warranty_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -54,7 +56,7 @@ class InventoryItem:
         self.history.append((new_owner, datetime.datetime.now(), station))
         self.save_to_db(station)
 
-    def get_history(self):
+    def get_history(self): # CRUD
         c.execute("SELECT * FROM inventory WHERE item_id=?", (self.item_id,))
         return c.fetchall()
 
@@ -72,22 +74,38 @@ class Inventory:
             self.items[item_id] = InventoryItem(item_id, name, owner, weight, description, serial_number, model_number,
                                                 manufacturer, purchase_date, warranty_info)
         else:
-            print("Item ID already exists.")
+            print("Item ID already exists. \n")
 
     def transfer_item(self, item_id, new_owner, station_id):
         if item_id in self.items and station_id in self.stations:
             station_name = self.stations[station_id].name
             self.items[item_id].transfer(new_owner, station_name)
         else:
-            print("Item ID or Station ID not found.")
+            print("Item ID or Station ID not found. \n")
 
-    def get_item_history(self, item_id):
-        if item_id in self.items:
-            return self.items[item_id].get_history()
+    def get_item_history(self, item_id): # CRUD
+        c.execute("SELECT * FROM inventory WHERE item_id=?", (item_id,))
+        return c.fetchall()
+
+    def get_item_status(self, item_id):
+        item_history = self.get_item_history(item_id)
+        if item_history:
+            latest_record = item_history[-1]  # Last record in the history
+            return {
+                'Owner': latest_record[2],
+                'Date': latest_record[3],
+                'Station': latest_record[4]
+            }
         else:
-            print("Item ID not found.")
-            return None
+            return "Item ID not found."
 
+    def print_item_history(self, item_id):
+        item_history = self.get_item_history(item_id)
+        if item_history:
+            for record in item_history:
+                print(f"Owner: {record[2]}, Date: {record[3]}, Station: {record[4]} \n")
+        else:
+            print("Item ID not found. \n")
 
     def add_station(self, station_id, name):
         c.execute("SELECT * FROM stations WHERE station_id=?", (station_id,))
@@ -96,7 +114,19 @@ class Inventory:
             self.stations[station_id] = Station(station_id, name)
             self.stations[station_id].save_to_db()
         else:
-            print("Station ID already exists.")
+            print("Station ID already exists. \n")
+
+    def scan_barcode(self, image_path):
+        image = Image.open(image_path)
+        barcodes = decode(image)
+        if barcodes:
+            for barcode in barcodes:
+                barcode_data = barcode.data.decode("utf-8")
+                print("Scanned Barcode Data:", barcode_data, "\n")
+                return barcode_data
+        else:
+            print("No barcodes found. \n")
+            return None
 
 
 # Example usage
@@ -112,37 +142,14 @@ inventory.add_item(2, "Smartphone", "Bob", 0.5, "Latest model smartphone", "SN65
 inventory.transfer_item(1, "Charlie", 1)
 inventory.transfer_item(2, "Diana", 2)
 
-print("Laptop History:", inventory.get_item_history(1))
-print("Smartphone History:", inventory.get_item_history(2))
+print("Laptop History:")
+inventory.print_item_history(1)
 
+print("Smartphone History:")
+inventory.print_item_history(2)
 
-# Assuming you have an inventory instance
-item_history = inventory.get_item_history(item_id)
-
-if item_history:
-    for record in item_history:
-        print(f"Owner: {record[2]}, Date: {record[3]}, Station: {record[4]}")
-else:
-    print("Item ID not found.")
-
-
-# Get the latest status of an item
-def get_item_status(item_id):
-    item_history = inventory.get_item_history(item_id)
-
-    if item_history:
-        latest_record = item_history[-1]  # Last record in the history
-        return {
-            'Owner': latest_record[2],
-            'Date': latest_record[3],
-            'Station': latest_record[4]
-        }
-    else:
-        return "Item ID not found."
-
-
-# Example usage
-item_status = get_item_status(1)
+# Check the latest status
+item_status = inventory.get_item_status(1)
 print(item_status)
 
 # Close the database connection when done
