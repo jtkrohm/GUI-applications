@@ -66,7 +66,9 @@ class Inventory:
 
     def add_item(self, item_id, name, owner, weight, description, serial_number, model_number, manufacturer,
                  purchase_date, warranty_info):
-        if item_id not in self.items:
+        c.execute("SELECT * FROM inventory WHERE item_id=?", (item_id,))
+        existing_item = c.fetchone()
+        if existing_item is None:
             self.items[item_id] = InventoryItem(item_id, name, owner, weight, description, serial_number, model_number,
                                                 manufacturer, purchase_date, warranty_info)
         else:
@@ -86,8 +88,11 @@ class Inventory:
             print("Item ID not found.")
             return None
 
+
     def add_station(self, station_id, name):
-        if station_id not in self.stations:
+        c.execute("SELECT * FROM stations WHERE station_id=?", (station_id,))
+        existing_station = c.fetchone()
+        if existing_station is None:
             self.stations[station_id] = Station(station_id, name)
             self.stations[station_id].save_to_db()
         else:
@@ -109,6 +114,36 @@ inventory.transfer_item(2, "Diana", 2)
 
 print("Laptop History:", inventory.get_item_history(1))
 print("Smartphone History:", inventory.get_item_history(2))
+
+
+# Assuming you have an inventory instance
+item_history = inventory.get_item_history(item_id)
+
+if item_history:
+    for record in item_history:
+        print(f"Owner: {record[2]}, Date: {record[3]}, Station: {record[4]}")
+else:
+    print("Item ID not found.")
+
+
+# Get the latest status of an item
+def get_item_status(item_id):
+    item_history = inventory.get_item_history(item_id)
+
+    if item_history:
+        latest_record = item_history[-1]  # Last record in the history
+        return {
+            'Owner': latest_record[2],
+            'Date': latest_record[3],
+            'Station': latest_record[4]
+        }
+    else:
+        return "Item ID not found."
+
+
+# Example usage
+item_status = get_item_status(1)
+print(item_status)
 
 # Close the database connection when done
 conn.close()
